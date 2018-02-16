@@ -20,18 +20,29 @@ let myCallback (reader:IO.StreamReader) url =
     printfn "Downloaded %s. First 1000 is %s" url html1000
     html      // return all the html
 
-let GetLinkNameUrl (pUrl:string) = 
-    let doc = HtmlDocument.Load(pUrl)
+let rec GetLinkNameUrl pUrlBuilder pUrl name listT = 
+    let fullUrl:string = pUrlBuilder pUrl
+    let doc = HtmlDocument.Load(fullUrl)
     let res = doc.CssSelect("ul.s-ref-indent-two > div > li > span > a") 
                 |> Seq.choose (fun x -> x.TryGetAttribute "href"
                                              |> Option.map (fun a -> x.InnerText(), a.Value())
-                              )
+                              ) 
+    let hhhh = res |> Seq.map (fun c -> GetLinkNameUrl pUrlBuilder (fst c) (snd c) listT)
+    let hyh = (name, pUrl, res)::listT 
+    
     res
-
+let FullUrl l r = 
+    sprintf "%s%s" l r
 [<EntryPoint>]
 let main argv = 
-    let url = "https://www.amazon.com/Televisions-Video/b/ref=sd_allcat_tv?ie=UTF8&node=1266092011"
-    GetLinkNameUrl url
+    
+    let baseUrl = "https://www.amazon.com"
+    let url =  GetLinkNameUrl (FullUrl baseUrl) "/s/ref=lp_283155_nr_n_0?fst=as%3Aoff&rh=n%3A283155%2Cn%3A%211000%2Cn%3A1&bbn=1000&ie=UTF8&qid=1518787887&rnid=1000" "123" List.empty
+    let gg =  url |> Seq.toList
+    let hh = fst gg.Head
+    let hh1 = snd gg.Head
+    //let gg1 = GetLinkNameUrl 
+
     // Create & configure HTTP web request
     
 
