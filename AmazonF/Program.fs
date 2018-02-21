@@ -4,13 +4,24 @@
 open System.Net
 open System
 open System.IO
+open System.Threading
 
-// Fetch the contents of a web page
+let rec ReTry f t (s:int) :WebResponse =
+    try
+        Thread.Sleep s
+        f()
+    with
+    | ex -> match t > 0 with
+            | true  -> printfn "EXCEPTION: %s" (ex.ToString())
+                       ReTry f (t-1) (s*2)
+            | false -> printfn "FALSE: %s" (ex.ToString()) 
+                       f()
+
 let fetchUrl callback url =        
     let req = WebRequest.Create(Uri(url)) :?> HttpWebRequest 
     req.UserAgent <- "Mozilla/5.0 (Windows NT 6.1; WOW64) AppleWebKit/535.2 (KHTML, like Gecko) Chrome/15.0.874.121 Safari/535.2";
 
-    use resp = req.GetResponse() 
+    use resp = ReTry req.GetResponse 5 500
     use stream = resp.GetResponseStream() 
     use reader = new IO.StreamReader(stream)
     callback reader url
@@ -20,29 +31,27 @@ let GetStreamUrl pReauest pUrlBuilder pUrlPart =
     pReauest fullUrl 
 
 let myCallback (reader:IO.StreamReader) url = 
+    printfn "Downloaded %s." url 
     let html = reader.ReadToEnd()
-    let html1000 = html.Substring(0,1000)
-    printfn "Downloaded %s. First 1000 is %s" url html1000
     html
 
-let rec GetLinkNameUrl pGetStreamUrl pUrlPart name listT = 
+let rec GetLinkNameUrl pGetStreamUrl pUrlPart nameParent = 
     let pUrlSteam:string = pGetStreamUrl pUrlPart
     let doc = HtmlAgilityPackWraper.createDoc(pUrlSteam)
     let uls = (fun (z:string) ->  doc.Descendants z)
                 >> Seq.filter (fun x -> x.Attributes.Contains "class" )
                 >> Seq.filter (fun x -> x.Attributes.["class"].Value.Contains("s-ref-indent-two") )
-                >> Seq.map (fun x -> x.ChildNodes.[0].Descendants "li" )
-                >> Seq.concat
-                >> Seq.map( fun x -> x.SelectNodes (".//span/a")) 
-                >> Seq.concat 
-                >> Seq.map( fun x -> (x.Attributes.["href"].Value, x.InnerText))
+                >> Seq.collect (fun x -> x.ChildNodes.[0].Descendants "li" )
+                >> Seq.collect( fun x -> x.SelectNodes (".//span/a")) 
+                >> Seq.map( fun x -> (nameParent |> string, x.Attributes.["href"].Value.Replace("&amp;", "&"), x.InnerText))
 
     let resTuple = uls "ul"
-    let recRes = resTuple |> Seq.map (fun c -> GetLinkNameUrl pGetStreamUrl (fst c) (snd c) listT)
-    let resList = (name, pUrlPart, resTuple)::listT 
-    let fd= ""
-    let f1d= ""
-    resList
+    //let recRes = resTuple |> Seq.map (fun c -> GetLinkNameUrl pGetStreamUrl (fst c) (snd c) listT)
+    
+    let f = ""
+    let t = ""
+
+    resTuple |> Seq.toList
 
 let FullUrl l r = 
     sprintf "%s%s" l r
@@ -50,12 +59,15 @@ let FullUrl l r =
 let main argv = 
     //let google = fetchUrl myCallback "https://www.amazon.com/s/ref=lp_283155_nr_n_0?fst=as%3Aoff&rh=n%3A283155%2Cn%3A%211000%2Cn%3A1&bbn=1000&ie=UTF8&qid=1518787887&rnid=1000"
     let baseUrl = "https://www.amazon.com"
-    let url =  GetLinkNameUrl 
-                (GetStreamUrl (fetchUrl myCallback) (FullUrl baseUrl))  
-                "/s/ref=lp_1_nr_n_0?fst=as%3Aoff&rh=n%3A283155%2Cn%3A%211000%2Cn%3A1%2Cn%3A173508&bbn=1&ie=UTF8&qid=1519043803&rnid=1"
-                "123" 
-                List.empty
+    let resTupleList = GetLinkNameUrl 
+                        (GetStreamUrl (fetchUrl myCallback) (FullUrl baseUrl))  
+                        "/s/ref=lp_1_nr_n_0?fst=as%3Aoff&rh=n%3A283155%2Cn%3A%211000%2Cn%3A1%2Cn%3A173508&bbn=1&ie=UTF8&qid=1519043803&rnid=1"
+                        "Start" 
+                
+    let recFold = resTupleList |> Seq.fold (fun a (q,w,e) -> (GetLinkNameUrl (GetStreamUrl (fetchUrl myCallback) (FullUrl baseUrl)) w e)@a) resTupleList
+    
     let f = ""
     let t = ""
+
     printfn "%A" argv
     0 // return an integer exit code
