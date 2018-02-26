@@ -7,21 +7,23 @@ open System.IO
 open System.Threading
 
 let rec ReTry f t (s:int) :WebResponse =
+    let multiply = System.Random().Next(2, 5)
+
     try
         Thread.Sleep s
         f()
     with
     | ex -> match t > 0 with
             | true  -> printfn "EXCEPTION: %s" (ex.ToString())
-                       ReTry f (t-1) (s*2)
+                       ReTry f (t-1) (s*multiply)
             | false -> printfn "FALSE: %s" (ex.ToString()) 
                        f()
 
 let fetchUrl callback url =        
     let req = WebRequest.Create(Uri(url)) :?> HttpWebRequest 
     req.UserAgent <- "Mozilla/5.0 (Windows NT 6.1; WOW64) AppleWebKit/535.2 (KHTML, like Gecko) Chrome/15.0.874.121 Safari/535.2";
-
-    use resp = ReTry req.GetResponse 5 500
+    let wait = System.Random().Next(100, 500)
+    use resp = ReTry req.GetResponse 5 wait
     use stream = resp.GetResponseStream() 
     use reader = new IO.StreamReader(stream)
     callback reader url
@@ -59,12 +61,12 @@ let FullUrl l r =
 let main argv = 
     //let google = fetchUrl myCallback "https://www.amazon.com/s/ref=lp_283155_nr_n_0?fst=as%3Aoff&rh=n%3A283155%2Cn%3A%211000%2Cn%3A1&bbn=1000&ie=UTF8&qid=1518787887&rnid=1000"
     let baseUrl = "https://www.amazon.com"
-    let resTupleList = GetLinkNameUrl 
-                        (GetStreamUrl (fetchUrl myCallback) (FullUrl baseUrl))  
+    let GetLinkNameUrlCurry = GetLinkNameUrl (GetStreamUrl (fetchUrl myCallback) (FullUrl baseUrl))  
+    let resTupleList = GetLinkNameUrlCurry
                         "/s/ref=lp_1_nr_n_0?fst=as%3Aoff&rh=n%3A283155%2Cn%3A%211000%2Cn%3A1%2Cn%3A173508&bbn=1&ie=UTF8&qid=1519043803&rnid=1"
                         "Start" 
                 
-    let recFold = resTupleList |> Seq.fold (fun a (q,w,e) -> (GetLinkNameUrl (GetStreamUrl (fetchUrl myCallback) (FullUrl baseUrl)) w e)@a) resTupleList
+    let recFold = resTupleList |> Seq.fold (fun a (nameParent,url,urlName) -> (GetLinkNameUrlCurry url urlName)@a) resTupleList
     
     let f = ""
     let t = ""
